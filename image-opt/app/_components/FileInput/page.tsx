@@ -41,8 +41,8 @@ export default function FileInput() {
               setCompressedFileSize(blob.size);
             };
           },
-          "img/webp",
-          0.9
+          "image/webp",
+          0.5
         );
       };
     }
@@ -55,7 +55,9 @@ export default function FileInput() {
           <div className="flex flex-col gap-3">
             <div className="flex gap-2">
               <label className="text-white">File Size:</label>
-              <p className="text-white">{fileSize}</p>
+              <p className="text-red-200">{`${Math.floor(
+                fileSize / 8192
+              )} kb`}</p>
             </div>
             {/* <div
               data-index={0}
@@ -78,7 +80,9 @@ export default function FileInput() {
               <div>
                 <div className="flex gap-2">
                   <label className="text-white">File Size:</label>
-                  <p className="text-white">{compressedFileSize}</p>
+                  <p className="text-green-200">{`${Math.floor(
+                    compressedFileSize / 8192
+                  )} kb`}</p>
                 </div>
                 <Image
                   crossOrigin="anonymous"
