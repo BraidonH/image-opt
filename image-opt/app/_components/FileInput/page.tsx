@@ -10,7 +10,6 @@ export default function FileInput() {
   const inputRef = useRef<any>(null);
   const canvasRef = useRef<any>(null);
   const imageRef = useRef<any>(null);
-  const downloadRef = useRef<any>(null);
 
   const [file, setFile] = useState<any>(null);
   const [compressedFile, setCompressedFile] = useState<any>(null);
