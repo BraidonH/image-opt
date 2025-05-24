@@ -5,10 +5,12 @@ import { useRef, useEffect, useState } from "react";
 import Image from "next/image";
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 
+
 export default function FileInput() {
   const inputRef = useRef<any>(null);
   const canvasRef = useRef<any>(null);
   const imageRef = useRef<any>(null);
+  const downloadRef = useRef<any>(null);
 
   const [file, setFile] = useState<any>(null);
   const [compressedFile, setCompressedFile] = useState<any>(null);
@@ -76,7 +78,7 @@ export default function FileInput() {
               <Image
                 crossOrigin="anonymous"
                 ref={imageRef}
-                className={`h-[330px] w-[330px] rounded-md object-contain`}
+                className={`h-[max-content] w-[max-content] lg:max-w-[500px] lg:max-h-[500px] lg:min-w-[500px] lg:min-h-[500px] rounded-md object-contain`}
                 alt=""
                 height={330}
                 width={330}
@@ -84,6 +86,7 @@ export default function FileInput() {
               />
             </div>
             {compressedFile ? (
+              <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-2">
                 <div className="flex gap-2">
                   <p className="font-bold">Compressed</p>
@@ -97,16 +100,18 @@ export default function FileInput() {
                 <Image
                   crossOrigin="anonymous"
                   ref={imageRef}
-                  className={`h-[330px] w-[330px] rounded-md object-contain`}
+                  className={`h-[max-content] w-[max-content] lg:max-w-[500px] lg:max-h-[500px] lg:min-w-[500px] lg:min-h-[500px] rounded-md object-contain`}
                   alt=""
                   height={330}
                   width={330}
                   src={compressedFile}
                 />
               </div>
+              <a className="text-black font-bold p-3 bg-[#4a916d] rounded-md flex items-center justify-between" href={compressedFile} download><p className="text-[25px]">Download</p><img className="max-h-[30px]" src="./download.png"/></a>
+              </div>
             ) : (
               <DotLottieReact
-                className="max-w-[300px] object-cover max-h-[200px]"
+                className="max-w-[300px] object-cover max-h-[200px] lg:max-w-[500px] lg:max-h-[400px] self-center"
                 src="https://lottie.host/25f4dd66-5821-4d2b-a4ee-04fdfa7ef3d0/a7MfJlH5m6.lottie"
                 loop
                 autoplay
@@ -128,7 +133,7 @@ export default function FileInput() {
                 inputRef.current != null ? inputRef.current.files[0] : ""
               )
             }
-            className=" p-3 rounded-md bg-[#5b6e26] hover:cursor-pointer min-w-[330px]"
+            className=" p-3 rounded-md bg-[#5b6e26] hover:cursor-pointer min-w-[max-content]"
             type="file"
             accept="image/*"
           />
