@@ -18,7 +18,7 @@ export const metadata: Metadata = {
 export default function Home() {
   return (
     <>
-      <link rel="icon" href="/favicon.ico" sizes="any" />
+      <link rel="icon" href="./favicon.ico" sizes="any" />
 
       <div className="overflow-hidden bg-[#7abcdb47] min-w-[100vw] flex flex-col items-center">
         <main className="flex flex-col gap-8 lg:gap-[60px] row-start-2 items-center sm:items-start mx-auto max-w-[330px] lg:max-w-screen min-h-screen justify-between py-[6vh]">
