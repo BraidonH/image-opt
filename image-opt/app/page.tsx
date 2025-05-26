@@ -29,7 +29,7 @@ export default function Home() {
         </div>
         <FileInput />
       </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-end min-h-[100px] bg-black min-w-[100vw] px-10">
+      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-end min-h-[50px] bg-black min-w-[100vw] px-10">
         <p className="self-center">Alpha 1.0.1</p>
       </footer>
     </div>

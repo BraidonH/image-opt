@@ -9,21 +9,25 @@ export default function FileInput() {
   const inputRef = useRef<any>(null);
   const canvasRef = useRef<any>(null);
   const imageRef = useRef<any>(null);
+  const rangeRef = useRef<any>(null);
 
   const [file, setFile] = useState<any>(null);
   const [compressedFile, setCompressedFile] = useState<any>(null);
   const [compressedFileSize, setCompressedFileSize] = useState<any>(null);
   const [fileSize, setFileSize] = useState<any>(null);
-  // const [toggle, setToggle] = useState<any>(null);
+  const [compression, setCompression] = useState<any>(0.5);
+  const [uploading, setUploading] = useState<any>(false);
   useEffect(() => {
     convertImage();
   }, [file]);
 
   const uploadFile = (file: any) => {
+    setUploading(true);
     const fileValue = file;
     const url = URL.createObjectURL(fileValue);
     setFile(url);
     setFileSize(file.size);
+    console.log(compression);
   };
 
   const convertImage = () => {
@@ -44,7 +48,7 @@ export default function FileInput() {
             };
           },
           "image/webp",
-          0.8
+          compression
         );
       };
     }
@@ -54,7 +58,7 @@ export default function FileInput() {
     <section className=" flex flex-col items-center justify-center">
       <div className="flex flex-col items-center gap-6 lg:items-start lg:justify-between py-8 px-8 bg-[#508aa547] rounded-lg lg:min-w-[804px] lg:min-h-[504px]">
         <div className="lg:min-h-[300px] min-h-[300px]">
-          {file ? (
+          {file && uploading ? (
             <div className="flex flex-col gap-3 lg:flex-row">
               <div className="flex flex-col gap-2 border-[1px] border-white p-4 rounded-md">
                 <div className="flex gap-2">
@@ -98,23 +102,28 @@ export default function FileInput() {
                   />
                 </div>
               ) : (
-                <DotLottieReact
-                  className="max-w-[300px] object-cover max-h-[200px] lg:self-center"
-                  src="https://lottie.host/25f4dd66-5821-4d2b-a4ee-04fdfa7ef3d0/a7MfJlH5m6.lottie"
-                  loop
-                  autoplay
-                />
+                <div></div>
               )}
+              <DotLottieReact
+                hidden={!compressedFile ? false : true}
+                className="max-w-[300px] object-cover max-h-[200px] lg:self-center"
+                src="https://lottie.host/25f4dd66-5821-4d2b-a4ee-04fdfa7ef3d0/a7MfJlH5m6.lottie"
+                loop
+                autoplay
+                renderConfig={{
+                  autoResize: true,
+                }}
+              />
               <canvas
                 className="hidden"
                 ref={canvasRef}
-                width={file.naturalWidth}
-                height={file.naturalHeight}
+                width={file ? file.naturalWidth : 330}
+                height={file ? file.naturalHeight : 330}
               ></canvas>
             </div>
           ) : null}
         </div>
-        <div className="text-white font-bold rounded-md">
+        <div className="text-white font-bold rounded-md flex flex-col lg:flex-row gap-6 justify-between lg:min-w-full">
           <input
             ref={inputRef}
             onChange={() =>
@@ -126,8 +135,35 @@ export default function FileInput() {
             type="file"
             accept="image/*"
           />
+          <div className="flex flex-col">
+            <label>{`Quality: ${
+              !rangeRef.current
+                ? (0.5).toString().replaceAll("0", "").replaceAll(".", "") +
+                  "0%"
+                : compression
+                    .toString()
+                    .replaceAll("0", "")
+                    .replaceAll(".", "") + "0%"
+            }`}</label>
+            <input
+              ref={rangeRef}
+              onChange={() => setCompression(rangeRef.current.value)}
+              type="range"
+              max="0.9"
+              min="0.1"
+              className="min-w-[200px]"
+              step="0.1"
+            />
+          </div>
         </div>
       </div>
+      <style jsx>
+        {`
+          input[type="range"] {
+            accent-color: #5b6e26;
+          }
+        `}
+      </style>
     </section>
   );
 }
