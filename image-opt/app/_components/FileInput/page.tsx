@@ -56,10 +56,10 @@ export default function FileInput() {
 
   return (
     <section className=" flex flex-col items-center justify-center">
-      <div className="flex flex-col items-center gap-6 lg:items-start lg:justify-between py-8 px-8 bg-[#508aa547] rounded-lg lg:min-w-[804px] lg:min-h-[504px]">
-        <div className="lg:min-h-[300px] min-h-[300px]">
+      <div className="flex flex-col items-center gap-6 lg:items-start lg:justify-between py-8 px-8 bg-[#508aa547] rounded-lg lg:min-w-100%] lg:min-h-[504px]">
+        <div className="flex flex-col items-center lg:min-h-[300px] min-h-[300px]">
           {file && uploading ? (
-            <div className="flex flex-col gap-3 lg:flex-row">
+            <div className="flex flex-col justify-between lg:flex-row gap-3 lg:gap-4">
               <div className="flex flex-col gap-2 border-[1px] border-white p-4 rounded-md">
                 <div className="flex gap-2">
                   <p className="font-bold">Original</p>
@@ -117,7 +117,9 @@ export default function FileInput() {
               )}
               <DotLottieReact
                 hidden={!compressedFile ? false : true}
-                className="max-w-[300px] object-cover max-h-[200px] lg:self-center"
+                className={`${
+                  compressedFile ? "hidden" : "flex"
+                } max-w-[300px] object-cover max-h-[200px] lg:self-center`}
                 src="https://lottie.host/25f4dd66-5821-4d2b-a4ee-04fdfa7ef3d0/a7MfJlH5m6.lottie"
                 loop
                 autoplay
@@ -134,11 +136,13 @@ export default function FileInput() {
             </div>
           ) : null}
         </div>
-        <div className="text-white font-bold rounded-md flex flex-col lg:flex-row gap-6 justify-between lg:min-w-full">
+        <div className="text-white font-bold rounded-md flex flex-col lg:flex-row gap-6 justify-between lg:min-w-full lg:max-w-full">
           {compressedFile ? (
-            <a download href={compressedFile}>
-              Download
-            </a>
+            <button className="bg-black p-4 rounded-lg lg:hidden">
+              <a download href={compressedFile}>
+                Download
+              </a>
+            </button>
           ) : null}
           <input
             ref={inputRef}
@@ -151,6 +155,13 @@ export default function FileInput() {
             type="file"
             accept="image/*"
           />
+          {compressedFile ? (
+            <button className="bg-black p-0 items-center px-4 rounded-lg hidden lg:flex">
+              <a download href={compressedFile}>
+                Download
+              </a>
+            </button>
+          ) : null}
           <div className="flex flex-col">
             <label>{`Quality: ${
               !rangeRef.current
