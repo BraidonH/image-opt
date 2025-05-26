@@ -64,7 +64,7 @@ export default function FileInput() {
                 <div className="flex gap-2">
                   <p className="font-bold">Original</p>
                   <div className="flex gap-2">
-                    <label className="text-white">File Size:</label>
+                    <label className="text-white">Size:</label>
                     <p className="text-red-200">{`${Math.floor(
                       fileSize / 8192
                     )} kb`}</p>
@@ -82,13 +82,24 @@ export default function FileInput() {
               </div>
               {compressedFile ? (
                 <div className="flex flex-col gap-2 border-white p-4 rounded-md border-[1px]">
-                  <div className="flex gap-2">
-                    <p className="font-bold">Compressed</p>
+                  <div className="flex gap-4 flex-wrap">
                     <div className="flex gap-2">
-                      <label className="text-white">File Size:</label>
-                      <p className="text-green-200">{`${Math.floor(
-                        compressedFileSize / 8192
-                      )} kb`}</p>
+                      <p className="font-bold">Compressed</p>
+                      <div className="flex gap-2">
+                        <label className="text-white">Size:</label>
+                        <p className="text-green-200">{`${Math.floor(
+                          compressedFileSize / 8192
+                        )} kb`}</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <label className="font-bold">Quality:</label>
+                      <p className="text-green-200">
+                        {compression
+                          .toString()
+                          .replaceAll("0", "")
+                          .replaceAll(".", "") + "0%"}
+                      </p>
                     </div>
                   </div>
                   <Image
@@ -124,6 +135,11 @@ export default function FileInput() {
           ) : null}
         </div>
         <div className="text-white font-bold rounded-md flex flex-col lg:flex-row gap-6 justify-between lg:min-w-full">
+          {compressedFile ? (
+            <a download href={compressedFile}>
+              Download
+            </a>
+          ) : null}
           <input
             ref={inputRef}
             onChange={() =>
