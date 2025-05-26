@@ -138,11 +138,13 @@ export default function FileInput() {
         </div>
         <div className="text-white font-bold rounded-md flex flex-col lg:flex-row gap-6 justify-between lg:min-w-full lg:max-w-full">
           {compressedFile ? (
-            <button className="bg-black p-4 rounded-lg lg:hidden">
-              <a download href={compressedFile}>
-                Download
-              </a>
-            </button>
+            <a
+              download
+              href={compressedFile}
+              className="hover:cursor bg-black p-4 rounded-lg lg:hidden text-center"
+            >
+              Download
+            </a>
           ) : null}
           <input
             ref={inputRef}
