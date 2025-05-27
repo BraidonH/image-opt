@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist_Mono, Share_Tech } from "next/font/google";
 import "./globals.css";
+import { Analytics } from "@vercel/analytics/next";
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
@@ -29,6 +30,7 @@ export default function RootLayout({
         className={`${shareTech.variable} ${geistMono.variable} antialiased flex flex-col items-center`}
       >
         {children}
+        <Analytics />
       </body>
     </html>
   );
