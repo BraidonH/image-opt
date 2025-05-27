@@ -25,7 +25,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="">
+    <html lang="en" className="overflow-hidden">
       <body
         className={`${shareTech.variable} ${geistMono.variable} antialiased flex flex-col items-center`}
       >

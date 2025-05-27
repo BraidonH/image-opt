@@ -21,7 +21,7 @@ export default function Home() {
       <link rel="icon" href="./favicon.ico" sizes="any" />
 
       <div className="overflow-hidden bg-[#7abcdb47] min-w-[100vw] flex flex-col items-center">
-        <main className="flex flex-col gap-8 lg:gap-[60px] row-start-2 items-center sm:items-start mx-auto max-w-[330px] lg:max-w-screen min-h-screen justify-between py-[6vh]">
+        <main className="flex flex-col gap-8 lg:gap-[60px] row-start-2 items-center mx-auto max-w-[330px] lg:max-w-screen  py-[6vh]">
           <div className="flex flex-row gap-2 lg:gap-4 self-start items-end">
             <Image
               height={30}
