@@ -68,9 +68,32 @@ export default function FileInput() {
     }
   }
 
+  function DropFiles(event: any) {
+    // setFile(event.dataTransfer.files[0]);
+    event.preventDefault();
+
+    if (compressedFile) {
+      setCompressedFile(null);
+      setCompressedFileSize(null);
+    }
+    uploadFile(event.dataTransfer.files[0]);
+    console.log(event.dataTransfer.files[0]);
+  }
+
   return (
-    <section className=" flex flex-col items-center justify-center">
-      <div className="flex flex-col items-center gap-6 lg:items-start lg:justify-between py-8 px-3 lg:px-6 bg-[#508aa518] rounded-lg lg:min-w-100% lg:min-h-[504px]">
+    <section
+      className=" flex flex-col items-center justify-center"
+      onDragOver={(event) => event.preventDefault()}
+      onDrop={(event) => DropFiles(event)}
+    >
+      <div className="flex flex-col items-center gap-6 lg:items-start lg:justify-between py-8 px-3 lg:px-6 bg-[#508aa518] rounded-lg lg:min-w-100% lg:min-h-[504px] relative">
+        <h2
+          className={`absolute top-[20%] flex flex-wrap text-[35px] p-4 text-start items-center justify-center ${
+            file ? "hidden" : "flex"
+          }`}
+        >
+          DRAG and DROP or press the file input!
+        </h2>
         <div className="flex flex-col items-center lg:min-h-[300px] min-h-[300px]">
           {file && uploading ? (
             <div className="flex flex-col justify-between lg:flex-row gap-3 lg:gap-4">
