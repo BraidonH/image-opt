@@ -20,9 +20,9 @@ export default function Home() {
     <>
       <link rel="icon" href="./favicon.ico" sizes="any" />
 
-      <div className="overflow-hidden bg-[#7abcdb47] min-w-[100vw] flex flex-col items-center min-h-[100vh] justify-between">
-        <main className="flex flex-col gap-8 lg:gap-[60px] row-start-2 items-center mx-auto max-w-[330px] lg:max-w-screen py-[20px]">
-          <div className="flex flex-row gap-2 lg:gap-4 self-start items-end">
+      <div className="overflow-hidden bg-[#7abcdb47]  min-w-[100vw] flex flex-col items-center min-h-[100vh] justify-between">
+        <main className="flex flex-col gap-8 lg:gap-[60px] row-start-2 items-center mx-auto max-w-[100%] lg:max-w-screen py-[20px]">
+          <div className="flex flex-row gap-2 lg:gap-4 self-start items-end px-3 lg:pt-4 lg:px-0">
             <Image
               height={30}
               width={30}
@@ -34,13 +34,16 @@ export default function Home() {
             <h1
               className={`text-white text-[30px] lg:text-[56px] ${shareTech.variable}`}
             >
-              FreeConvert –<br className="lg:hidden" /> WebP Tool
+              FreeWebConvert{" "}
+              <span className="text-[20px] font-bold">
+                –<br className="lg:hidden" /> WebP Tool
+              </span>
             </h1>
           </div>
           <FileInput />
         </main>
         <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-end min-h-[50px] bg-black min-w-[100vw] px-10">
-          <p className="self-center">Alpha 1.0.1</p>
+          <p className="self-center">Alpha 1.0.2</p>
         </footer>
       </div>
     </>
