@@ -70,7 +70,7 @@ export default function FileInput() {
 
   return (
     <section className=" flex flex-col items-center justify-center">
-      <div className="flex flex-col items-center gap-6 lg:items-start lg:justify-between py-8 px-8 bg-[#508aa547] rounded-lg lg:min-w-100%] lg:min-h-[504px]">
+      <div className="flex flex-col items-center gap-6 lg:items-start lg:justify-between py-8 px-3 lg:px-6 bg-[#508aa518] rounded-lg lg:min-w-100% lg:min-h-[504px]">
         <div className="flex flex-col items-center lg:min-h-[300px] min-h-[300px]">
           {file && uploading ? (
             <div className="flex flex-col justify-between lg:flex-row gap-3 lg:gap-4">
@@ -178,7 +178,7 @@ export default function FileInput() {
               </a>
             </button>
           ) : null}
-          <div className="flex flex-col">
+          <div className="flex flex-col text-[#ebedffc8] bg-transparent border-[2px] border-[#ebedffc8] px-4 rounded-lg gap-[2px] min-h-[80px] justify-center lg:min-h-auto">
             <label>{`Quality: ${
               !rangeRef.current
                 ? (0.5).toString().replaceAll("0", "").replaceAll(".", "") +
@@ -203,7 +203,18 @@ export default function FileInput() {
       <style jsx>
         {`
           input[type="range"] {
-            accent-color: #5b6e26;
+            accent-color: white;
+            background-color: black;
+          }
+          input[type="file"] {
+            background-color: transparent;
+            border: 2px solid #ebedffc8;
+            color: #ebedffc8;
+          }
+          input[type="file"]:hover {
+            color: white;
+            background-color: black;
+            transition: all ease-in-out 250ms;
           }
         `}
       </style>
