@@ -22,12 +22,14 @@ export default function FileInput() {
   }, [file]);
 
   const uploadFile = (file: any) => {
+    if (compressedFile) {
+      setCompressedFile(null);
+    }
     setUploading(true);
     const fileValue = file;
     const url = URL.createObjectURL(fileValue);
     setFile(url);
     setFileSize(file.size);
-    console.log(compression);
   };
 
   const convertImage = () => {
@@ -53,6 +55,18 @@ export default function FileInput() {
       };
     }
   };
+
+  function adjustCompression() {
+    if (rangeRef.current) {
+      setCompression(rangeRef.current.value);
+    }
+    if (compressedFile) {
+      setCompressedFile(null);
+      setCompressedFileSize(null);
+      uploadFile(inputRef.current != null ? inputRef.current.files[0] : "");
+      return;
+    }
+  }
 
   return (
     <section className=" flex flex-col items-center justify-center">
@@ -176,7 +190,7 @@ export default function FileInput() {
             }`}</label>
             <input
               ref={rangeRef}
-              onChange={() => setCompression(rangeRef.current.value)}
+              onChange={() => adjustCompression()}
               type="range"
               max="0.9"
               min="0.1"
