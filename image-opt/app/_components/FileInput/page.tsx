@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useCallback } from "react";
 import Image from "next/image";
-import { DotLottieReact } from "@lottiefiles/dotlottie-react";
+// import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 
 export default function FileInput() {
   const inputRef = useRef<any>(null);
@@ -15,25 +15,14 @@ export default function FileInput() {
   const [compressedFile, setCompressedFile] = useState<any>(null);
   const [compressedFileSize, setCompressedFileSize] = useState<any>(null);
   const [fileSize, setFileSize] = useState<any>(null);
-  const [compression, setCompression] = useState<any>(0.5);
+  const [compression, setCompression] = useState<any>(
+    rangeRef.current ? parseInt(rangeRef.current.value) : 0.5
+  );
   const [uploading, setUploading] = useState<any>(false);
-  useEffect(() => {
-    convertImage();
-  }, [file]);
 
-  const uploadFile = (file: any) => {
-    if (compressedFile) {
-      setCompressedFile(null);
-    }
-    setUploading(true);
-    const fileValue = file;
-    const url = URL.createObjectURL(fileValue);
-    setFile(url);
-    setFileSize(file.size);
-  };
-
-  const convertImage = () => {
+  function convertImage() {
     if (canvasRef.current != null && imageRef.current != null) {
+      console.log(imageRef, compression, compressedFileSize);
       const ctx = canvasRef.current.getContext("2d");
       imageRef.current.onload = () => {
         canvasRef.current.height = imageRef.current.naturalHeight;
@@ -54,19 +43,35 @@ export default function FileInput() {
         );
       };
     }
-  };
+  }
 
-  function adjustCompression() {
-    if (rangeRef.current) {
-      setCompression(rangeRef.current.value);
-    }
+  const uploadFile = (file: any) => {
     if (compressedFile) {
       setCompressedFile(null);
-      setCompressedFileSize(null);
-      uploadFile(inputRef.current != null ? inputRef.current.files[0] : "");
-      return;
     }
+    setUploading(true);
+    const fileValue = file;
+
+    const url = URL.createObjectURL(fileValue);
+    setFile(url);
+    setFileSize(file.size);
+  };
+
+  function adjustCompression(compressionValue: string) {
+    setCompressedFile(null);
+    setCompressedFileSize(null);
+    setCompression(parseFloat(compressionValue));
+
+    const ctx = canvasRef.current.getContext("2d");
+    ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+    imageRef.current.src = "";
+
+    uploadFile(inputRef.current.files[0]);
   }
+
+  useEffect(() => {
+    convertImage();
+  }, [file, compression, convertImage]);
 
   function DropFiles(event: any) {
     // setFile(event.dataTransfer.files[0]);
@@ -77,7 +82,6 @@ export default function FileInput() {
       setCompressedFileSize(null);
     }
     uploadFile(event.dataTransfer.files[0]);
-    console.log(event.dataTransfer.files[0]);
   }
 
   return (
@@ -96,7 +100,7 @@ export default function FileInput() {
         </h2>
         <div className="flex flex-col items-center lg:min-h-[300px] min-h-[300px]">
           {file && uploading ? (
-            <div className="flex flex-col justify-between lg:flex-row gap-3 lg:gap-4">
+            <div className="flex flex-col justify-between lg:flex-row gap-3 lg:gap-4 items-center">
               <div className="flex flex-col gap-2 border-[1px] border-white p-4 rounded-md">
                 <div className="flex gap-2">
                   <p className="font-bold">Original</p>
@@ -152,7 +156,7 @@ export default function FileInput() {
               ) : (
                 <div></div>
               )}
-              <DotLottieReact
+              {/* <DotLottieReact
                 hidden={!compressedFile ? false : true}
                 className={`${
                   compressedFile ? "hidden" : "flex"
@@ -163,7 +167,7 @@ export default function FileInput() {
                 renderConfig={{
                   autoResize: true,
                 }}
-              />
+              /> */}
               <canvas
                 className="hidden"
                 ref={canvasRef}
@@ -213,7 +217,7 @@ export default function FileInput() {
             }`}</label>
             <input
               ref={rangeRef}
-              onChange={() => adjustCompression()}
+              onChange={() => adjustCompression(rangeRef.current.value)}
               type="range"
               max="0.9"
               min="0.1"
