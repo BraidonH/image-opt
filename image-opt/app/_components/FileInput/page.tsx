@@ -85,6 +85,8 @@ export default function FileInput() {
   const listScrollRef = useRef<HTMLDivElement>(null);
   const [listScrollTop, setListScrollTop] = useState(0);
   const [listHeight, setListHeight] = useState(400);
+  const filesLengthRef = useRef(0);
+  filesLengthRef.current = files.length;
 
   const defaultQuality = parseFloat(compression);
   const defaultQualityPercent = Math.round(defaultQuality * 100);
@@ -225,8 +227,10 @@ export default function FileInput() {
   const uploadFiles = useCallback(
     (fileList: FileList | null) => {
       if (!fileList?.length) return;
-      const maxBytes = MAX_FILE_SIZE_MB * 1024 * 1024;
+      // Copy to array immediately so we don't depend on the input's FileList after this (important on mobile)
       const list = Array.from(fileList).filter((f) => f.type.startsWith("image/"));
+      if (!list.length) return;
+      const maxBytes = MAX_FILE_SIZE_MB * 1024 * 1024;
       const rejected: string[] = [];
       const valid: File[] = [];
       for (const f of list) {
@@ -234,32 +238,39 @@ export default function FileInput() {
         else valid.push(f);
       }
       if (rejected.length) showToast(rejected.join(", "), "error");
-      const currentCount = files.length;
+      if (!valid.length) {
+        setTimeout(() => { if (inputRef.current) inputRef.current.value = ""; }, 0);
+        return;
+      }
+      const currentCount = filesLengthRef.current;
       if (currentCount + valid.length > MAX_FILES) {
         const take = MAX_FILES - currentCount;
         if (take <= 0) {
           showToast(`Maximum ${MAX_FILES} images allowed`, "error");
-          inputRef.current!.value = "";
+          setTimeout(() => { if (inputRef.current) inputRef.current.value = ""; }, 0);
           return;
         }
         valid.splice(take);
         showToast(`Added ${take} (max ${MAX_FILES} images)`, "info");
       }
-      const defaultQ = parseFloat(compression);
-      const newFiles: FileEntry[] = valid.map((f) => ({
-        id: `${f.name}-${Date.now()}-${Math.random()}`,
-        file: f,
-        url: URL.createObjectURL(f),
-        originalSize: f.size,
-        quality: defaultQ,
-        status: "pending" as const,
-      }));
-      setFiles((prev) => [...prev, ...newFiles]);
-      if (valid.length && valid.length === list.length && rejected.length === 0)
+      setFiles((prev) => {
+        const defaultQ = parseFloat(compression);
+        const newFiles: FileEntry[] = valid.map((f) => ({
+          id: `${f.name}-${Date.now()}-${Math.random()}`,
+          file: f,
+          url: URL.createObjectURL(f),
+          originalSize: f.size,
+          quality: defaultQ,
+          status: "pending" as const,
+        }));
+        return [...prev, ...newFiles];
+      });
+      if (valid.length === list.length && rejected.length === 0)
         showToast(`${valid.length} image(s) added`, "success");
-      inputRef.current!.value = "";
+      // Defer clearing input so mobile browsers don't invalidate File refs / blob URLs
+      setTimeout(() => { if (inputRef.current) inputRef.current.value = ""; }, 150);
     },
-    [compression, files.length, showToast]
+    [compression, showToast]
   );
 
   function setFileQuality(id: string, qualityValue: number) {
