@@ -12,7 +12,7 @@ type FileEntry = {
   quality: number;
   compressedUrl?: string;
   compressedSize?: number;
-  status: "pending" | "converting" | "done";
+  status: "pending" | "converting" | "done" | "failed";
 };
 
 type Toast = { id: number; message: string; type: "success" | "error" | "info" };
@@ -176,11 +176,12 @@ export default function FileInput() {
       };
       img.onerror = () => {
         processingRef.current = false;
-        setFiles((p) => {
-          const f = p.find((x) => x.id === entry.id);
-          if (f?.url) URL.revokeObjectURL(f.url);
-          return p.filter((f) => f.id !== entry.id);
-        });
+        setFiles((p) =>
+          p.map((f) =>
+            f.id === entry.id ? { ...f, status: "failed" as const } : f
+          )
+        );
+        showToast("Conversion failed — tap Retry to try again", "error");
         setTimeout(() => processQueue(), 0);
       };
       img.src = entry.url;
@@ -189,7 +190,7 @@ export default function FileInput() {
         f.id === entry.id ? { ...f, status: "converting" as const } : f
       );
     });
-  }, []);
+  }, [showToast]);
 
   useEffect(() => {
     const hasPending = files.some((f) => f.status === "pending");
@@ -365,6 +366,18 @@ export default function FileInput() {
       )
     );
     showToast("Re-queued for conversion", "info");
+  }, [showToast]);
+
+  const retryConversion = useCallback((id: string) => {
+    setFiles((prev) =>
+      prev.map((f) => {
+        if (f.id !== id || f.status !== "failed") return f;
+        if (f.url) URL.revokeObjectURL(f.url);
+        const newUrl = URL.createObjectURL(f.file);
+        return { ...f, url: newUrl, status: "pending" as const };
+      })
+    );
+    showToast("Retrying conversion…", "info");
   }, [showToast]);
 
   const downloadAllAsZip = useCallback(async () => {
@@ -619,6 +632,9 @@ export default function FileInput() {
                       {entry.status === "pending" && (
                         <p className="text-slate-500 text-xs sm:text-sm leading-relaxed">Queued</p>
                       )}
+                      {entry.status === "failed" && (
+                        <p className="text-red-400/90 text-xs sm:text-sm leading-relaxed">Failed to convert</p>
+                      )}
                       <div className="flex items-center gap-3 pt-2">
                         <label className="text-slate-400 text-xs sm:text-sm whitespace-nowrap shrink-0 font-medium">
                           Quality:
@@ -654,6 +670,15 @@ export default function FileInput() {
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2 sm:gap-4 shrink-0 self-end sm:self-auto">
+                    {entry.status === "failed" && (
+                      <button
+                        type="button"
+                        onClick={() => retryConversion(entry.id)}
+                        className="px-4 py-2.5 rounded-lg bg-amber-700/80 hover:bg-amber-600 text-amber-100 text-sm font-medium border border-amber-600 transition-colors"
+                      >
+                        Retry
+                      </button>
+                    )}
                     {entry.status === "done" && entry.compressedUrl && (
                       <>
                         <a
@@ -756,6 +781,9 @@ export default function FileInput() {
                       {entry.status === "pending" && (
                         <p className="text-slate-500 text-xs sm:text-sm leading-relaxed">Queued</p>
                       )}
+                      {entry.status === "failed" && (
+                        <p className="text-red-400/90 text-xs sm:text-sm leading-relaxed">Failed to convert</p>
+                      )}
                       <div className="flex items-center gap-3 pt-2">
                         <label className="text-slate-400 text-xs sm:text-sm whitespace-nowrap shrink-0 font-medium">
                           Quality:
@@ -791,6 +819,15 @@ export default function FileInput() {
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2 sm:gap-4 shrink-0 self-end sm:self-auto">
+                    {entry.status === "failed" && (
+                      <button
+                        type="button"
+                        onClick={() => retryConversion(entry.id)}
+                        className="px-4 py-2.5 rounded-lg bg-amber-700/80 hover:bg-amber-600 text-amber-100 text-sm font-medium border border-amber-600 transition-colors"
+                      >
+                        Retry
+                      </button>
+                    )}
                     {entry.status === "done" && entry.compressedUrl && (
                       <>
                         <a
