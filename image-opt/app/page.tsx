@@ -1,9 +1,8 @@
 
 
 import dynamic from "next/dynamic";
-import { Share_Tech } from "next/font/google";
-import Image from "next/image";
 import type { Metadata } from "next";
+import Nav from "./_components/Nav";
 
 const FileInput = dynamic(() => import("./_components/FileInput/page"), {
   ssr: true,
@@ -15,12 +14,6 @@ const FileInput = dynamic(() => import("./_components/FileInput/page"), {
       </div>
     </div>
   ),
-});
-
-const shareTech = Share_Tech({
-  variable: "--font-share-tech",
-  subsets: ["latin"],
-  weight: "400",
 });
 
 const siteUrl = "https://freewebconvert.com";
@@ -73,34 +66,12 @@ export default function Home() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
 
-      <div className="relative min-h-screen w-full flex flex-col items-center bg-[#0a0e14] overflow-hidden">
+      <div className="relative min-h-screen w-full flex flex-col items-center theme-bg-page overflow-hidden">
+        <a href="#converter" className="skip-link">
+          Skip to converter
+        </a>
         <main className="flex flex-col gap-12 sm:gap-16 lg:gap-20 items-center w-full max-w-6xl px-6 sm:px-10 lg:px-12 py-10 sm:py-14 lg:py-16 flex-1">
-          <header className="flex flex-col items-start gap-6 sm:gap-7 w-full pt-4 sm:pt-6 pb-2">
-            <div className="flex items-center gap-4 sm:gap-5">
-              <div className="flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-slate-800/90 border border-slate-600/60 shadow-md">
-                <Image
-                  height={28}
-                  width={28}
-                  alt=""
-                  src="./file.svg"
-                  className="w-7 h-7 sm:w-8 sm:h-8 opacity-90"
-                />
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <h1
-                  className={`text-slate-100 text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight leading-tight ${shareTech.variable}`}
-                >
-                  FreeWebConvert
-                </h1>
-                <p className="text-slate-400 font-medium text-sm sm:text-base tracking-wide">
-                  WebP Converter
-                </p>
-              </div>
-            </div>
-            <p className="text-slate-500 text-left text-sm sm:text-base max-w-md leading-relaxed">
-              Convert images to WebP in your browser — paste, batch ZIP, per-image quality. Free, private, no signup.
-            </p>
-          </header>
+          <Nav />
 
           <FileInput />
 
@@ -163,7 +134,7 @@ export default function Home() {
           </section>
         </main>
 
-        <footer className="w-full min-w-full py-6 px-6 sm:px-10 lg:px-12 bg-black/90 border-t border-slate-800">
+        <footer className="w-full min-w-full py-6 px-6 sm:px-10 lg:px-12 theme-card border-t theme-border">
           <div className="max-w-6xl mx-auto flex justify-between items-center">
             <p className="text-slate-500 text-sm">Alpha 1.1.2</p>
           </div>

@@ -24,7 +24,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="overflow-x-hidden scroll-smooth">
+    <html lang="en" className="overflow-x-hidden scroll-smooth" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){var t=localStorage.getItem('theme');if(!t)t='dark';document.documentElement.setAttribute('data-theme',t);})();`,
+          }}
+        />
+      </head>
       <meta name="google-adsense-account" content="ca-pub-5509282482580720"></meta>
       <body
         className={`${shareTech.variable} ${geistMono.variable} font-[family-name:var(--font-share-tech)] antialiased flex flex-col items-center min-h-screen`}

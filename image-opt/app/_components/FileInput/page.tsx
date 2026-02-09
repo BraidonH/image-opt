@@ -23,6 +23,9 @@ const IMAGE_CONTAINER_CLASS =
 const VISIBLE_FILES_BEFORE_ACCORDION = 1;
 const MAX_FILES = 50;
 const MAX_FILE_SIZE_MB = 25;
+const DEFAULT_QUALITY_STORAGE_KEY = "webp-default-quality";
+const VIRTUAL_LIST_THRESHOLD = 20;
+const ESTIMATED_ROW_HEIGHT = 220;
 
 function getBaseName(filename: string): string {
   return filename.replace(/\.[^.]+$/, "");
@@ -36,7 +39,7 @@ function formatBytes(bytes: number): string {
 
 function ToastList({ toasts, dismiss }: { toasts: Toast[]; dismiss: (id: number) => void }) {
   return (
-    <div aria-live="polite" className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-4 sm:max-w-sm z-50 flex flex-col gap-2">
+    <div aria-live="polite" className="toast-list fixed bottom-4 left-4 right-4 sm:left-auto sm:right-4 sm:max-w-sm z-50 flex flex-col gap-2">
       {toasts.map((t) => (
         <button
           key={t.id}
@@ -63,6 +66,15 @@ export default function FileInput() {
 
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [compression, setCompression] = useState<string>("0.5");
+
+  useEffect(() => {
+    const stored = localStorage.getItem(DEFAULT_QUALITY_STORAGE_KEY);
+    if (stored == null) return;
+    const n = parseFloat(stored);
+    if (!Number.isNaN(n) && n >= 0.1 && n <= 0.9) {
+      setCompression(n <= 1 ? n.toString() : (n / 100).toString());
+    }
+  }, []);
   const [isDragging, setIsDragging] = useState(false);
   const [editingQuality, setEditingQuality] = useState<Record<string, string>>({});
   const [isListExpanded, setIsListExpanded] = useState(false);
@@ -70,6 +82,9 @@ export default function FileInput() {
   const [outputFilenameStyle, setOutputFilenameStyle] = useState<"original" | "suffix">("original");
   const [imageLoaded, setImageLoaded] = useState<Record<string, boolean>>({});
   const toastIdRef = useRef(0);
+  const listScrollRef = useRef<HTMLDivElement>(null);
+  const [listScrollTop, setListScrollTop] = useState(0);
+  const [listHeight, setListHeight] = useState(400);
 
   const defaultQuality = parseFloat(compression);
   const defaultQualityPercent = Math.round(defaultQuality * 100);
@@ -186,6 +201,27 @@ export default function FileInput() {
     if (files.length <= VISIBLE_FILES_BEFORE_ACCORDION) setIsListExpanded(false);
   }, [files.length]);
 
+  const useVirtualList = useAccordion && isListExpanded && files.length >= VIRTUAL_LIST_THRESHOLD;
+
+  useEffect(() => {
+    if (!useVirtualList || !listScrollRef.current) return;
+    const el = listScrollRef.current;
+    const ro = new ResizeObserver(() => setListHeight(el.clientHeight));
+    ro.observe(el);
+    setListHeight(el.clientHeight);
+    return () => ro.disconnect();
+  }, [useVirtualList]);
+
+  const virtualStart =
+    useVirtualList ? Math.max(0, Math.floor(listScrollTop / ESTIMATED_ROW_HEIGHT) - 1) : 0;
+  const virtualEnd = useVirtualList
+    ? Math.min(
+        files.length - 1,
+        virtualStart + Math.ceil(listHeight / ESTIMATED_ROW_HEIGHT) + 2
+      )
+    : files.length - 1;
+  const virtualSlice = useVirtualList ? files.slice(virtualStart, virtualEnd + 1) : [];
+
   const uploadFiles = useCallback(
     (fileList: FileList | null) => {
       if (!fileList?.length) return;
@@ -267,7 +303,11 @@ export default function FileInput() {
     const clamped = isNaN(num)
       ? 0.5
       : Math.min(0.9, Math.max(0.1, num > 1 ? num / 100 : num));
-    setCompression(clamped.toString());
+    const str = clamped.toString();
+    setCompression(str);
+    if (typeof window !== "undefined") {
+      localStorage.setItem(DEFAULT_QUALITY_STORAGE_KEY, str);
+    }
   }
 
   function DropFiles(event: React.DragEvent) {
@@ -381,6 +421,7 @@ export default function FileInput() {
 
   return (
     <section
+      id="converter"
       className="w-full flex flex-col items-center justify-center"
       onDragOver={(e) => {
         e.preventDefault();
@@ -390,11 +431,12 @@ export default function FileInput() {
       onDrop={DropFiles}
     >
       <div
-        className={`relative w-full flex flex-col gap-8 sm:gap-10 md:gap-12 p-8 sm:p-10 md:p-12 rounded-xl sm:rounded-2xl border-2 border-dashed transition-all duration-200 ${
+        className={`relative w-full flex flex-col gap-8 sm:gap-10 md:gap-12 p-8 sm:p-10 md:p-12 rounded-xl sm:rounded-2xl border-2 border-dashed transition-all duration-200 theme-border ${
           isDragging
             ? "border-slate-500 bg-slate-800/50"
             : "border-slate-600/60 bg-slate-900/90 hover:border-slate-500/70"
         }`}
+        data-converter-card
       >
         {/* Empty state - stacked above controls when no files */}
         {!hasFiles && (
@@ -422,6 +464,9 @@ export default function FileInput() {
             >
               Choose images
             </button>
+            <p className="text-slate-500 text-center text-xs font-medium">
+              Your files never leave your device — conversion runs in your browser.
+            </p>
           </div>
         )}
 
@@ -466,7 +511,12 @@ export default function FileInput() {
               </div>
             )}
 
-            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 flex-wrap items-stretch sm:items-center">
+            {/* Actions bar: sticky when list is scrollable so it stays visible */}
+            <div
+              className={`flex flex-col sm:flex-row gap-3 sm:gap-4 flex-wrap items-stretch sm:items-center shrink-0 ${
+                useAccordion && isListExpanded ? "sticky top-0 z-10 py-3 -mx-1 px-1 rounded-lg theme-card border theme-border" : ""
+              }`}
+            >
               <button
                 type="button"
                 onClick={applyQualityToAll}
@@ -498,13 +548,156 @@ export default function FileInput() {
             </div>
 
             <div
+              ref={useAccordion && isListExpanded ? listScrollRef : undefined}
+              onScroll={useAccordion && isListExpanded ? (e) => setListScrollTop(e.currentTarget.scrollTop) : undefined}
               className={`flex flex-col gap-5 sm:gap-6 pr-3 sm:pr-4 ${
                 useAccordion && isListExpanded
                   ? "max-h-[60vh] sm:max-h-[400px] overflow-y-auto"
                   : ""
               }`}
             >
-              {visibleFiles.map((entry) => {
+              {useVirtualList && (
+                <>
+                  <div style={{ height: virtualStart * ESTIMATED_ROW_HEIGHT, minHeight: 0 }} aria-hidden />
+                  {virtualSlice.map((entry, i) => {
+                    const index = virtualStart + i + 1;
+                    const loaded = imageLoaded[entry.id];
+                    return (
+                <div
+                  key={entry.id}
+                  style={{ minHeight: ESTIMATED_ROW_HEIGHT }}
+                  className="flex flex-col sm:flex-row sm:items-center gap-5 sm:gap-6 p-5 sm:p-6 rounded-xl sm:rounded-2xl bg-slate-800/80 border border-slate-700/60"
+                  role="article"
+                  aria-label={`Image ${index}: ${entry.file.name}`}
+                >
+                  <div className="flex items-center justify-center shrink-0 w-8 h-8 rounded-lg bg-slate-700/80 border border-slate-600 text-slate-300 text-sm font-semibold">
+                    {index}
+                  </div>
+                  <div className="flex items-start sm:items-center gap-5 min-w-0 flex-1">
+                    <div className={`${IMAGE_CONTAINER_CLASS} flex items-center justify-center`}>
+                      {!loaded && (
+                        <div className="absolute inset-0 bg-slate-700/60 animate-pulse motion-reduce:animate-none rounded-lg" aria-hidden />
+                      )}
+                      <Image
+                        src={entry.url}
+                        alt={entry.file.name}
+                        width={160}
+                        height={160}
+                        className="w-full h-full object-contain"
+                        unoptimized
+                        onLoad={() => setImageLoaded((p) => ({ ...p, [entry.id]: true }))}
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <p className="text-slate-200 font-medium text-sm sm:text-base truncate leading-snug" title={entry.file.name}>
+                        {entry.file.name}
+                      </p>
+                      <p className="text-red-400/90 text-xs sm:text-sm leading-relaxed">
+                        Original: {Math.round(entry.originalSize / 1024)} KB
+                      </p>
+                      {entry.status === "converting" && (
+                        <p className="text-slate-400 text-xs sm:text-sm flex items-center gap-2 mt-1 leading-relaxed">
+                          <span className="animate-spin motion-reduce:animate-none">⟳</span> Converting...
+                        </p>
+                      )}
+                      {entry.status === "done" && entry.compressedSize != null && (
+                        <p className="text-emerald-400 text-xs sm:text-sm leading-relaxed">
+                          Compressed: {Math.round(entry.compressedSize / 1024)} KB
+                        </p>
+                      )}
+                      {entry.status === "pending" && (
+                        <p className="text-slate-500 text-xs sm:text-sm leading-relaxed">Queued</p>
+                      )}
+                      <div className="flex items-center gap-3 pt-2">
+                        <label className="text-slate-400 text-xs sm:text-sm whitespace-nowrap shrink-0 font-medium">
+                          Quality:
+                        </label>
+                        <input
+                          type="number"
+                          min={10}
+                          max={90}
+                          value={
+                            entry.id in editingQuality
+                              ? editingQuality[entry.id]
+                              : Math.round(entry.quality * 100)
+                          }
+                          onChange={(e) =>
+                            setEditingQuality((prev) => ({
+                              ...prev,
+                              [entry.id]: e.target.value,
+                            }))
+                          }
+                          onBlur={(e) =>
+                            applyFileQualityInput(entry.id, e.target.value)
+                          }
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") e.currentTarget.blur();
+                          }}
+                          disabled={entry.status === "converting"}
+                          className="w-14 sm:w-16 px-2.5 py-2 rounded-md bg-slate-900/80 border border-slate-600 text-slate-200 text-xs sm:text-sm text-right disabled:opacity-50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        />
+                        <span className="text-slate-400 text-xs sm:text-sm shrink-0">
+                          %
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-4 shrink-0 self-end sm:self-auto">
+                    {entry.status === "done" && entry.compressedUrl && (
+                      <>
+                        <a
+                          href={entry.compressedUrl}
+                          download={getOutputFilename(entry)}
+                          className="px-5 py-3 sm:px-6 sm:py-3 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-100 font-medium text-sm transition-colors border border-slate-600"
+                        >
+                          Download
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => copyToClipboard(entry)}
+                          className="px-3 py-2.5 rounded-lg bg-slate-700/80 hover:bg-slate-600 text-slate-200 text-sm font-medium border border-slate-600 transition-colors"
+                          aria-label="Copy WebP to clipboard"
+                        >
+                          Copy
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => reConvert(entry.id)}
+                          className="px-3 py-2.5 rounded-lg bg-slate-700/80 hover:bg-slate-600 text-slate-200 text-sm font-medium border border-slate-600 transition-colors"
+                          aria-label="Re-convert with current quality"
+                        >
+                          Re-convert
+                        </button>
+                      </>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => removeFile(entry.id)}
+                      className="p-3 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-slate-700/50 transition-colors touch-manipulation"
+                      aria-label={`Remove ${entry.file.name}`}
+                    >
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M6 18L18 6M6 6l12 12"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                    );
+                  })}
+                  <div style={{ height: (files.length - virtualEnd - 1) * ESTIMATED_ROW_HEIGHT, minHeight: 0 }} aria-hidden />
+                </>
+              )}
+              {!useVirtualList && visibleFiles.map((entry) => {
                 const index = files.findIndex((f) => f.id === entry.id) + 1;
                 const loaded = imageLoaded[entry.id];
                 return (
@@ -520,7 +713,7 @@ export default function FileInput() {
                   <div className="flex items-start sm:items-center gap-5 min-w-0 flex-1">
                     <div className={`${IMAGE_CONTAINER_CLASS} flex items-center justify-center`}>
                       {!loaded && (
-                        <div className="absolute inset-0 bg-slate-700/60 animate-pulse rounded-lg" aria-hidden />
+                        <div className="absolute inset-0 bg-slate-700/60 animate-pulse motion-reduce:animate-none rounded-lg" aria-hidden />
                       )}
                       <Image
                         src={entry.url}
@@ -533,7 +726,7 @@ export default function FileInput() {
                       />
                     </div>
                     <div className="min-w-0 flex-1 space-y-2">
-                      <p className="text-slate-200 font-medium text-sm sm:text-base truncate leading-snug">
+                      <p className="text-slate-200 font-medium text-sm sm:text-base truncate leading-snug" title={entry.file.name}>
                         {entry.file.name}
                       </p>
                       <p className="text-red-400/90 text-xs sm:text-sm leading-relaxed">
@@ -541,7 +734,7 @@ export default function FileInput() {
                       </p>
                       {entry.status === "converting" && (
                         <p className="text-slate-400 text-xs sm:text-sm flex items-center gap-2 mt-1 leading-relaxed">
-                          <span className="animate-spin">⟳</span> Converting...
+                          <span className="animate-spin motion-reduce:animate-none">⟳</span> Converting...
                         </p>
                       )}
                       {entry.status === "done" && entry.compressedSize != null && (
