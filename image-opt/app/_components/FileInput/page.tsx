@@ -3,6 +3,7 @@
 import { useRef, useEffect, useState, useCallback } from "react";
 import Image from "next/image";
 import JSZip from "jszip";
+import imageCompression from "browser-image-compression";
 
 type FileEntry = {
   id: string;
@@ -62,7 +63,6 @@ function ToastList({ toasts, dismiss }: { toasts: Toast[]; dismiss: (id: number)
 
 export default function FileInput() {
   const inputRef = useRef<HTMLInputElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [compression, setCompression] = useState<string>("0.5");
@@ -128,7 +128,6 @@ export default function FileInput() {
 
   const processQueue = useCallback(() => {
     if (processingRef.current) return;
-    if (!canvasRef.current) return;
 
     setFiles((prev) => {
       const pendingIndex = prev.findIndex((f) => f.status === "pending");
@@ -137,54 +136,41 @@ export default function FileInput() {
       const entry = prev[pendingIndex];
       processingRef.current = true;
 
-      const img = new window.Image();
-      img.crossOrigin = "anonymous";
-      img.onload = () => {
-        const ctx = canvasRef.current!.getContext("2d")!;
-        canvasRef.current!.width = img.naturalWidth;
-        canvasRef.current!.height = img.naturalHeight;
-        ctx.drawImage(img, 0, 0);
-        const q = entry.quality;
-        canvasRef.current!.toBlob(
-          (blob) => {
-            processingRef.current = false;
-            if (!blob) return;
-            const fr = new FileReader();
-            fr.readAsDataURL(blob);
-            fr.onloadend = () => {
-              const compressedUrl = fr.result as string;
-              const compressedSize = blob.size;
-              setFiles((p) => {
-                const next = p.map((f) =>
-                  f.id === entry.id
-                    ? {
-                        ...f,
-                        status: "done" as const,
-                        compressedUrl,
-                        compressedSize,
-                      }
-                    : f
-                );
-                setTimeout(() => processQueue(), 0);
-                return next;
-              });
-            };
-          },
-          "image/webp",
-          q
-        );
-      };
-      img.onerror = () => {
-        processingRef.current = false;
-        setFiles((p) =>
-          p.map((f) =>
-            f.id === entry.id ? { ...f, status: "failed" as const } : f
-          )
-        );
-        showToast("Conversion failed — tap Retry to try again", "error");
-        setTimeout(() => processQueue(), 0);
-      };
-      img.src = entry.url;
+      imageCompression(entry.file, {
+        fileType: "image/webp",
+        initialQuality: entry.quality,
+        useWebWorker: true,
+        preserveExif: false,
+      })
+        .then((compressedFile) => {
+          processingRef.current = false;
+          const compressedUrl = URL.createObjectURL(compressedFile);
+          const compressedSize = compressedFile.size;
+          setFiles((p) => {
+            const next = p.map((f) =>
+              f.id === entry.id
+                ? {
+                    ...f,
+                    status: "done" as const,
+                    compressedUrl,
+                    compressedSize,
+                  }
+                : f
+            );
+            setTimeout(() => processQueue(), 0);
+            return next;
+          });
+        })
+        .catch(() => {
+          processingRef.current = false;
+          setFiles((p) =>
+            p.map((f) =>
+              f.id === entry.id ? { ...f, status: "failed" as const } : f
+            )
+          );
+          showToast("Conversion failed — tap Retry to try again", "error");
+          setTimeout(() => processQueue(), 0);
+        });
 
       return prev.map((f) =>
         f.id === entry.id ? { ...f, status: "converting" as const } : f
@@ -953,7 +939,6 @@ export default function FileInput() {
           )}
         </div>
 
-        <canvas ref={canvasRef} className="hidden" width={1} height={1} />
       </div>
 
       <ToastList toasts={toasts} dismiss={(id) => setToasts((p) => p.filter((t) => t.id !== id))} />
