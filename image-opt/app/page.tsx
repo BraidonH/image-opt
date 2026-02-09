@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import type { Metadata } from "next";
 import Nav from "./_components/Nav";
+import JsonLdScript from "./_components/JsonLdScript";
 
 const FileInput = dynamic(() => import("./_components/FileInput/page"), {
   ssr: true,
@@ -61,10 +62,7 @@ export default function Home() {
   return (
     <>
       <link rel="icon" href="./favicon.ico" sizes="any" />
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
+      <JsonLdScript content={JSON.stringify(jsonLd)} />
 
       <div className="relative min-h-screen w-full flex flex-col items-center theme-bg-page overflow-hidden">
         <a href="#converter" className="skip-link">
