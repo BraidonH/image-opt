@@ -1,177 +1,383 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useRef, useEffect, useState, useCallback } from "react";
 import Image from "next/image";
+import JSZip from "jszip";
+
+type FileEntry = {
+  id: string;
+  file: File;
+  url: string;
+  originalSize: number;
+  quality: number;
+  compressedUrl?: string;
+  compressedSize?: number;
+  status: "pending" | "converting" | "done";
+};
+
+type Toast = { id: number; message: string; type: "success" | "error" | "info" };
 
 const IMAGE_CONTAINER_CLASS =
-  "relative w-full min-w-[280px] sm:min-w-[320px] lg:min-w-[280px] max-w-[280px] sm:max-w-[320px] lg:max-w-[280px] aspect-square mx-auto overflow-hidden rounded-lg bg-slate-900/50";
+  "relative min-w-[72px] max-w-[72px] sm:min-w-[120px] sm:max-w-[120px] md:min-w-[160px] md:max-w-[160px] w-[72px] sm:w-[120px] md:w-[160px] aspect-square overflow-hidden rounded-lg bg-slate-900/80 shrink-0";
 
-function ImageWithPlaceholder({
-  src,
-  alt,
-  imageRef,
-  unoptimized,
-}: {
-  src: string;
-  alt: string;
-  imageRef?: React.RefObject<HTMLImageElement | null>;
-  unoptimized?: boolean;
-}) {
-  const [isLoaded, setIsLoaded] = useState(false);
+const VISIBLE_FILES_BEFORE_ACCORDION = 1;
+const MAX_FILES = 50;
+const MAX_FILE_SIZE_MB = 25;
 
+function getBaseName(filename: string): string {
+  return filename.replace(/\.[^.]+$/, "");
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function ToastList({ toasts, dismiss }: { toasts: Toast[]; dismiss: (id: number) => void }) {
   return (
-    <div className={IMAGE_CONTAINER_CLASS}>
-      {!isLoaded && (
-        <div
-          className="absolute inset-0 animate-pulse bg-slate-700/50"
-          aria-hidden
-        />
-      )}
-      <Image
-        ref={imageRef}
-        crossOrigin="anonymous"
-        unoptimized={unoptimized}
-        src={src}
-        alt={alt}
-        width={330}
-        height={330}
-        className={`w-full h-full object-contain transition-opacity duration-200 ${
-          isLoaded ? "opacity-100" : "opacity-0"
-        }`}
-        onLoad={() => setIsLoaded(true)}
-      />
+    <div aria-live="polite" className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-4 sm:max-w-sm z-50 flex flex-col gap-2">
+      {toasts.map((t) => (
+        <button
+          key={t.id}
+          type="button"
+          onClick={() => dismiss(t.id)}
+          className={`text-left px-4 py-3 rounded-lg border text-sm font-medium shadow-lg transition-opacity ${
+            t.type === "error"
+              ? "bg-red-950/90 border-red-800 text-red-200"
+              : t.type === "success"
+                ? "bg-emerald-950/90 border-emerald-800 text-emerald-200"
+                : "bg-slate-800/95 border-slate-600 text-slate-200"
+          }`}
+        >
+          {t.message}
+        </button>
+      ))}
     </div>
   );
 }
 
 export default function FileInput() {
-  const inputRef = useRef<any>(null);
-  const canvasRef = useRef<any>(null);
-  const imageRef = useRef<any>(null);
-  const rangeRef = useRef<any>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const [file, setFile] = useState<any>(null);
-  const [compressedFile, setCompressedFile] = useState<any>(null);
-  const [compressedFileSize, setCompressedFileSize] = useState<any>(null);
-  const [fileSize, setFileSize] = useState<any>(null);
-  const [compression, setCompression] = useState<any>(0.5);
-  const [uploading, setUploading] = useState<any>(false);
-  const [isConverting, setIsConverting] = useState(false);
+  const [files, setFiles] = useState<FileEntry[]>([]);
+  const [compression, setCompression] = useState<string>("0.5");
   const [isDragging, setIsDragging] = useState(false);
+  const [editingQuality, setEditingQuality] = useState<Record<string, string>>({});
+  const [isListExpanded, setIsListExpanded] = useState(false);
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const [outputFilenameStyle, setOutputFilenameStyle] = useState<"original" | "suffix">("original");
+  const [imageLoaded, setImageLoaded] = useState<Record<string, boolean>>({});
+  const toastIdRef = useRef(0);
 
-  const convertImage = useCallback(() => {
-    if (canvasRef.current == null || imageRef.current == null) return;
-    setIsConverting(true);
+  const defaultQuality = parseFloat(compression);
+  const defaultQualityPercent = Math.round(defaultQuality * 100);
+  const hasFiles = files.length > 0;
+  const useAccordion = files.length > VISIBLE_FILES_BEFORE_ACCORDION;
+  const visibleFiles = useAccordion && !isListExpanded
+    ? files.slice(0, VISIBLE_FILES_BEFORE_ACCORDION)
+    : files;
+  const hiddenCount = files.length - visibleFiles.length;
 
-    const img = imageRef.current;
-    const ctx = canvasRef.current.getContext("2d");
-    const quality = parseFloat(compression);
+  const convertingIndex = files.findIndex((f) => f.status === "converting");
+  const doneCount = files.filter((f) => f.status === "done").length;
+  const totalOriginal = files.reduce((a, f) => a + f.originalSize, 0);
+  const totalCompressed = files
+    .filter((f) => f.compressedSize != null)
+    .reduce((a, f) => a + (f.compressedSize ?? 0), 0);
+  const savingsPercent =
+    totalOriginal > 0 && totalCompressed > 0
+      ? Math.round((1 - totalCompressed / totalOriginal) * 100)
+      : 0;
 
-    const runConversion = () => {
-      canvasRef.current.height = img.naturalHeight;
-      canvasRef.current.width = img.naturalWidth;
-      ctx.drawImage(img, 0, 0);
-      canvasRef.current.toBlob(
-        (blob: any) => {
-          const fr = new FileReader();
-          fr.readAsDataURL(blob);
-          fr.onloadend = () => {
-            setCompressedFile(fr.result);
-            setCompressedFileSize(blob.size);
-            setIsConverting(false);
-          };
-        },
-        "image/webp",
-        quality
+  const showToast = useCallback((message: string, type: Toast["type"] = "info") => {
+    const id = ++toastIdRef.current;
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => setToasts((p) => p.filter((t) => t.id !== id)), 4000);
+  }, []);
+
+  const getOutputFilename = useCallback(
+    (entry: FileEntry) => {
+      const base = getBaseName(entry.file.name);
+      return outputFilenameStyle === "suffix"
+        ? `${base}_q${Math.round(entry.quality * 100)}.webp`
+        : `${base}.webp`;
+    },
+    [outputFilenameStyle]
+  );
+
+  const processingRef = useRef(false);
+
+  const processQueue = useCallback(() => {
+    if (processingRef.current) return;
+    if (!canvasRef.current) return;
+
+    setFiles((prev) => {
+      const pendingIndex = prev.findIndex((f) => f.status === "pending");
+      if (pendingIndex === -1) return prev;
+
+      const entry = prev[pendingIndex];
+      processingRef.current = true;
+
+      const img = new window.Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        const ctx = canvasRef.current!.getContext("2d")!;
+        canvasRef.current!.width = img.naturalWidth;
+        canvasRef.current!.height = img.naturalHeight;
+        ctx.drawImage(img, 0, 0);
+        const q = entry.quality;
+        canvasRef.current!.toBlob(
+          (blob) => {
+            processingRef.current = false;
+            if (!blob) return;
+            const fr = new FileReader();
+            fr.readAsDataURL(blob);
+            fr.onloadend = () => {
+              const compressedUrl = fr.result as string;
+              const compressedSize = blob.size;
+              setFiles((p) => {
+                const next = p.map((f) =>
+                  f.id === entry.id
+                    ? {
+                        ...f,
+                        status: "done" as const,
+                        compressedUrl,
+                        compressedSize,
+                      }
+                    : f
+                );
+                setTimeout(() => processQueue(), 0);
+                return next;
+              });
+            };
+          },
+          "image/webp",
+          q
+        );
+      };
+      img.onerror = () => {
+        processingRef.current = false;
+        setFiles((p) => {
+          const f = p.find((x) => x.id === entry.id);
+          if (f?.url) URL.revokeObjectURL(f.url);
+          return p.filter((f) => f.id !== entry.id);
+        });
+        setTimeout(() => processQueue(), 0);
+      };
+      img.src = entry.url;
+
+      return prev.map((f) =>
+        f.id === entry.id ? { ...f, status: "converting" as const } : f
       );
-    };
-
-    if (img.complete && img.naturalWidth > 0) {
-      runConversion();
-    } else {
-      setIsConverting(true);
-      img.onload = runConversion;
-    }
-  }, [compression]);
+    });
+  }, []);
 
   useEffect(() => {
-    convertImage();
-  }, [file, convertImage]);
-
-  const uploadFile = (fileObj: File | null) => {
-    if (!fileObj) return;
-    if (compressedFile) {
-      setCompressedFile(null);
+    const hasPending = files.some((f) => f.status === "pending");
+    const isConvertingNow = files.some((f) => f.status === "converting");
+    if (hasPending && !isConvertingNow) {
+      processQueue();
     }
-    setUploading(true);
-    const url = URL.createObjectURL(fileObj);
-    setFile(url);
-    setFileSize(fileObj.size);
-  };
+  }, [files, processQueue]);
 
-  function triggerReconvert() {
-    setCompressedFile(null);
-    setCompressedFileSize(null);
+  useEffect(() => {
+    if (files.length <= VISIBLE_FILES_BEFORE_ACCORDION) setIsListExpanded(false);
+  }, [files.length]);
+
+  const uploadFiles = useCallback(
+    (fileList: FileList | null) => {
+      if (!fileList?.length) return;
+      const maxBytes = MAX_FILE_SIZE_MB * 1024 * 1024;
+      const list = Array.from(fileList).filter((f) => f.type.startsWith("image/"));
+      const rejected: string[] = [];
+      const valid: File[] = [];
+      for (const f of list) {
+        if (f.size > maxBytes) rejected.push(`${f.name} (max ${MAX_FILE_SIZE_MB} MB)`);
+        else valid.push(f);
+      }
+      if (rejected.length) showToast(rejected.join(", "), "error");
+      const currentCount = files.length;
+      if (currentCount + valid.length > MAX_FILES) {
+        const take = MAX_FILES - currentCount;
+        if (take <= 0) {
+          showToast(`Maximum ${MAX_FILES} images allowed`, "error");
+          inputRef.current!.value = "";
+          return;
+        }
+        valid.splice(take);
+        showToast(`Added ${take} (max ${MAX_FILES} images)`, "info");
+      }
+      const defaultQ = parseFloat(compression);
+      const newFiles: FileEntry[] = valid.map((f) => ({
+        id: `${f.name}-${Date.now()}-${Math.random()}`,
+        file: f,
+        url: URL.createObjectURL(f),
+        originalSize: f.size,
+        quality: defaultQ,
+        status: "pending" as const,
+      }));
+      setFiles((prev) => [...prev, ...newFiles]);
+      if (valid.length && valid.length === list.length && rejected.length === 0)
+        showToast(`${valid.length} image(s) added`, "success");
+      inputRef.current!.value = "";
+    },
+    [compression, files.length, showToast]
+  );
+
+  function setFileQuality(id: string, qualityValue: number) {
+    const clamped = Math.min(0.9, Math.max(0.1, qualityValue));
+    setFiles((prev) =>
+      prev.map((f) =>
+        f.id === id
+          ? {
+              ...f,
+              quality: clamped,
+              ...(f.status === "done"
+                ? {
+                    status: "pending" as const,
+                    compressedUrl: undefined,
+                    compressedSize: undefined,
+                  }
+                : {}),
+            }
+          : f
+      )
+    );
   }
 
-  function adjustCompression(value?: string) {
-    const raw = value ?? rangeRef.current?.value ?? compression;
+  function applyFileQualityInput(id: string, raw: string) {
+    setEditingQuality((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    if (raw === "" || raw === "-") {
+      setFileQuality(id, 0.5);
+      return;
+    }
     const num = parseFloat(raw);
+    const clamped = Math.min(90, Math.max(10, num)) / 100;
+    setFileQuality(id, clamped);
+  }
+
+  function setDefaultQuality(value: string) {
+    const num = parseFloat(value);
     const clamped = isNaN(num)
       ? 0.5
       : Math.min(0.9, Math.max(0.1, num > 1 ? num / 100 : num));
     setCompression(clamped.toString());
-    setManualInputValue(null);
-    if (compressedFile) triggerReconvert();
   }
 
-  const [manualInputValue, setManualInputValue] = useState<string | null>(null);
-
-  function handleManualQualityChange(e: React.ChangeEvent<HTMLInputElement>) {
-    setManualInputValue(e.target.value);
-  }
-
-  function applyManualQuality() {
-    const raw = manualInputValue ?? "";
-    setManualInputValue(null);
-    if (raw === "" || raw === "-") {
-      setCompression("0.5");
-      if (compressedFile) triggerReconvert();
-    } else {
-      const num = parseFloat(raw);
-      const clamped = isNaN(num)
-        ? 0.5
-        : Math.min(90, Math.max(10, num)) / 100;
-      setCompression(clamped.toString());
-      if (compressedFile) triggerReconvert();
-    }
-  }
-
-  const applyButtonRef = useRef<HTMLButtonElement>(null);
-
-  function handleManualQualityBlur(e: React.FocusEvent<HTMLInputElement>) {
-    if (e.relatedTarget === applyButtonRef.current) return;
-    applyManualQuality();
-  }
-
-  function handleManualQualityKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Enter") {
-      e.currentTarget.blur();
-    }
-  }
-
-  function DropFiles(event: any) {
+  function DropFiles(event: React.DragEvent) {
     event.preventDefault();
     setIsDragging(false);
-    if (compressedFile) {
-      setCompressedFile(null);
-      setCompressedFileSize(null);
-    }
-    uploadFile(event.dataTransfer.files[0]);
+    uploadFiles(event.dataTransfer.files);
   }
 
-  const qualityPercent = Math.round(parseFloat(compression) * 100);
+  function removeFile(id: string) {
+    setFiles((prev) => {
+      const f = prev.find((x) => x.id === id);
+      if (f?.url) URL.revokeObjectURL(f.url);
+      return prev.filter((x) => x.id !== id);
+    });
+    setImageLoaded((p) => {
+      const next = { ...p };
+      delete next[id];
+      return next;
+    });
+    showToast("Image removed", "info");
+  }
+
+  const applyQualityToAll = useCallback(() => {
+    const q = defaultQuality;
+    setFiles((prev) =>
+      prev.map((f) => ({
+        ...f,
+        quality: q,
+        ...(f.status === "done"
+          ? { status: "pending" as const, compressedUrl: undefined, compressedSize: undefined }
+          : {}),
+      }))
+    );
+    setEditingQuality({});
+    showToast(`Applied ${defaultQualityPercent}% to all images`, "success");
+  }, [defaultQuality, defaultQualityPercent, showToast]);
+
+  const reConvert = useCallback((id: string) => {
+    setFiles((prev) =>
+      prev.map((f) =>
+        f.id === id && f.status === "done"
+          ? { ...f, status: "pending" as const, compressedUrl: undefined, compressedSize: undefined }
+          : f
+      )
+    );
+    showToast("Re-queued for conversion", "info");
+  }, [showToast]);
+
+  const downloadAllAsZip = useCallback(async () => {
+    const done = files.filter((f) => f.status === "done" && f.compressedUrl);
+    if (!done.length) return;
+    showToast("Preparing ZIP...", "info");
+    try {
+      const zip = new JSZip();
+      for (const entry of done) {
+        const res = await fetch(entry.compressedUrl!);
+        const blob = await res.blob();
+        zip.file(getOutputFilename(entry), blob);
+      }
+      const out = await zip.generateAsync({ type: "blob" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(out);
+      a.download = "webp-converted.zip";
+      a.click();
+      URL.revokeObjectURL(a.href);
+      showToast("Download started", "success");
+    } catch {
+      showToast("Could not create ZIP", "error");
+    }
+  }, [files, getOutputFilename, showToast]);
+
+  const copyToClipboard = useCallback(
+    async (entry: FileEntry) => {
+      if (!entry.compressedUrl || entry.status !== "done") return;
+      try {
+        const res = await fetch(entry.compressedUrl);
+        const blob = await res.blob();
+        await navigator.clipboard.write([
+          new ClipboardItem({ [blob.type]: blob }),
+        ]);
+        showToast("Copied to clipboard", "success");
+      } catch {
+        showToast("Copy failed", "error");
+      }
+    },
+    [showToast]
+  );
+
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      const files: File[] = [];
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith("image/")) {
+          const f = items[i].getAsFile();
+          if (f) files.push(f);
+        }
+      }
+      if (files.length) {
+        e.preventDefault();
+        const list = new DataTransfer();
+        files.forEach((f) => list.items.add(f));
+        uploadFiles(list.files);
+        showToast(`${files.length} image(s) pasted`, "success");
+      }
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, [showToast, uploadFiles]);
 
   return (
     <section
@@ -184,192 +390,332 @@ export default function FileInput() {
       onDrop={DropFiles}
     >
       <div
-        className={`relative w-full flex flex-col items-center gap-6 sm:gap-8 p-6 sm:p-8 rounded-2xl border-2 border-dashed transition-all duration-200 ${
+        className={`relative w-full flex flex-col gap-8 sm:gap-10 md:gap-12 p-8 sm:p-10 md:p-12 rounded-xl sm:rounded-2xl border-2 border-dashed transition-all duration-200 ${
           isDragging
-            ? "border-sky-400 bg-sky-500/10"
-            : "border-slate-600/50 bg-slate-800/30 hover:border-slate-500/70"
+            ? "border-slate-500 bg-slate-800/50"
+            : "border-slate-600/60 bg-slate-900/90 hover:border-slate-500/70"
         }`}
       >
-        {/* Empty state */}
-        <div
-          className={`absolute inset-0 flex flex-col items-center justify-center p-6 pointer-events-none transition-opacity duration-200 ${
-            file ? "opacity-0" : "opacity-100"
-          }`}
-        >
-          <p className="text-slate-400 text-center text-base sm:text-lg md:text-xl font-medium max-w-md">
-            Drag and drop an image here, or{" "}
+        {/* Empty state - stacked above controls when no files */}
+        {!hasFiles && (
+          <div className="flex flex-col items-center justify-center gap-6 sm:gap-8 w-full">
+            <p className="text-slate-400 text-center text-sm sm:text-base md:text-lg font-medium leading-relaxed max-w-[320px] sm:max-w-md hidden sm:block">
+              Drag and drop images here, or{" "}
+              <button
+                type="button"
+                onClick={() => inputRef.current?.click()}
+                className="text-slate-300 underline underline-offset-4 hover:text-emerald-400 transition-colors font-semibold"
+              >
+                browse files
+              </button>
+            </p>
+            <p className="text-slate-400 text-center text-sm sm:text-base font-medium leading-relaxed max-w-[320px] sm:hidden">
+              Tap Choose images to add photos (max {MAX_FILES} images, {MAX_FILE_SIZE_MB} MB each)
+            </p>
+            <p className="text-slate-500 text-center text-xs sm:text-sm">
+              You can also paste from clipboard (Ctrl+V / Cmd+V)
+            </p>
             <button
               type="button"
               onClick={() => inputRef.current?.click()}
-              className="text-sky-400 hover:text-sky-300 underline underline-offset-4 pointer-events-auto transition-colors"
+              className="px-6 py-4 sm:px-8 sm:py-4 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium text-sm transition-colors border border-slate-600 hover:border-slate-500 touch-manipulation w-full sm:w-auto"
             >
-              browse files
+              Choose images
             </button>
-          </p>
-        </div>
+          </div>
+        )}
 
-        {/* Image preview area - fixed dimensions prevent layout shift */}
-        <div className="w-full min-h-[200px] sm:min-h-[280px] flex flex-col items-center">
-          {file && uploading ? (
-            <div className="flex flex-col lg:flex-row gap-6 sm:gap-8 w-full justify-center items-stretch">
-              {/* Original image */}
-              <div className="flex flex-col gap-3 p-4 rounded-xl bg-slate-800/50 border border-slate-700/50 min-w-[280px] sm:min-w-[320px] lg:min-w-[280px]">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-slate-300 font-medium text-sm">
-                    Original
-                  </span>
-                  <span className="text-slate-400 text-sm">
-                    {Math.round(fileSize / 1024)} KB
-                  </span>
-                </div>
-                <ImageWithPlaceholder
-                  src={file}
-                  alt="Original image"
-                  imageRef={imageRef}
-                  unoptimized
-                />
-              </div>
+        {/* File list */}
+        {hasFiles && (
+          <div className="flex flex-col gap-6 sm:gap-8 w-full">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span className="text-slate-400 text-sm font-medium" aria-label={`${files.length} files`}>
+                {files.length} file{files.length !== 1 ? "s" : ""}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setFiles((prev) => {
+                    prev.forEach((f) => f.url && URL.revokeObjectURL(f.url));
+                    return [];
+                  });
+                  setImageLoaded({});
+                }}
+                className="text-slate-500 hover:text-slate-300 text-sm font-medium py-2 px-3 rounded hover:bg-slate-800/50 transition-colors"
+                aria-label="Clear all images"
+              >
+                Clear all
+              </button>
+            </div>
 
-              {/* Compressed image - always show when file exists to prevent layout shift */}
-              <div className="flex flex-col gap-3 p-4 rounded-xl bg-slate-800/50 border border-slate-700/50 min-w-[280px] sm:min-w-[320px] lg:min-w-[280px]">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-slate-300 font-medium text-sm">
-                    Compressed
-                  </span>
-                  {compressedFile ? (
-                    <div className="flex gap-4 text-sm">
-                      <span className="text-emerald-400">
-                        {Math.round(compressedFileSize / 1024)} KB
-                      </span>
-                      <span className="text-sky-400">
-                        Quality: {qualityPercent}%
-                      </span>
-                    </div>
-                  ) : null}
-                </div>
-                {compressedFile ? (
-                  <ImageWithPlaceholder
-                    src={compressedFile}
-                    alt="Compressed WebP"
-                    unoptimized
-                  />
-                ) : (
-                  <div className={`${IMAGE_CONTAINER_CLASS} flex items-center justify-center`}>
-                    <div className="flex flex-col items-center gap-3">
-                      <svg
-                        className="animate-spin h-8 w-8 text-sky-400"
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        aria-hidden="true"
-                      >
-                        <circle
-                          className="opacity-25"
-                          cx="12"
-                          cy="12"
-                          r="10"
-                          stroke="currentColor"
-                          strokeWidth="4"
-                        />
-                        <path
-                          className="opacity-75"
-                          fill="currentColor"
-                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                        />
-                      </svg>
-                      <span className="text-slate-400 text-sm">
-                        Converting...
-                      </span>
-                    </div>
-                  </div>
+            {(doneCount > 0 || convertingIndex >= 0) && (
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6 flex-wrap" role="status" aria-live="polite">
+                {doneCount > 0 && totalOriginal > 0 && totalCompressed > 0 && (
+                  <p className="text-slate-400 text-sm">
+                    Total: {formatBytes(totalOriginal)} → {formatBytes(totalCompressed)}
+                    {savingsPercent > 0 && (
+                      <span className="text-emerald-400 ml-1">({savingsPercent}% smaller)</span>
+                    )}
+                  </p>
+                )}
+                {convertingIndex >= 0 && (
+                  <p className="text-slate-400 text-sm">
+                    Converting image {convertingIndex + 1} of {files.length}
+                  </p>
                 )}
               </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 flex-wrap items-stretch sm:items-center">
+              <button
+                type="button"
+                onClick={applyQualityToAll}
+                className="px-4 py-2.5 rounded-lg bg-slate-700/80 hover:bg-slate-600 text-slate-200 text-sm font-medium border border-slate-600 transition-colors"
+              >
+                Apply {defaultQualityPercent}% to all
+              </button>
+              {doneCount > 0 && (
+                <button
+                  type="button"
+                  onClick={downloadAllAsZip}
+                  className="px-4 py-2.5 rounded-lg bg-slate-700/80 hover:bg-slate-600 text-slate-200 text-sm font-medium border border-slate-600 transition-colors"
+                >
+                  Download all (ZIP)
+                </button>
+              )}
+              <div className="flex items-center gap-2">
+                <span className="text-slate-500 text-xs sm:text-sm">Output name:</span>
+                <select
+                  value={outputFilenameStyle}
+                  onChange={(e) => setOutputFilenameStyle(e.target.value as "original" | "suffix")}
+                  className="rounded-md bg-slate-800 border border-slate-600 text-slate-200 text-xs sm:text-sm px-2.5 py-2"
+                  aria-label="Output filename style"
+                >
+                  <option value="original">Original.webp</option>
+                  <option value="suffix">Name_q80.webp</option>
+                </select>
+              </div>
             </div>
-          ) : null}
-        </div>
+
+            <div
+              className={`flex flex-col gap-5 sm:gap-6 pr-3 sm:pr-4 ${
+                useAccordion && isListExpanded
+                  ? "max-h-[60vh] sm:max-h-[400px] overflow-y-auto"
+                  : ""
+              }`}
+            >
+              {visibleFiles.map((entry) => {
+                const index = files.findIndex((f) => f.id === entry.id) + 1;
+                const loaded = imageLoaded[entry.id];
+                return (
+                <div
+                  key={entry.id}
+                  className="flex flex-col sm:flex-row sm:items-center gap-5 sm:gap-6 p-5 sm:p-6 rounded-xl sm:rounded-2xl bg-slate-800/80 border border-slate-700/60"
+                  role="article"
+                  aria-label={`Image ${index}: ${entry.file.name}`}
+                >
+                  <div className="flex items-center justify-center shrink-0 w-8 h-8 rounded-lg bg-slate-700/80 border border-slate-600 text-slate-300 text-sm font-semibold">
+                    {index}
+                  </div>
+                  <div className="flex items-start sm:items-center gap-5 min-w-0 flex-1">
+                    <div className={`${IMAGE_CONTAINER_CLASS} flex items-center justify-center`}>
+                      {!loaded && (
+                        <div className="absolute inset-0 bg-slate-700/60 animate-pulse rounded-lg" aria-hidden />
+                      )}
+                      <Image
+                        src={entry.url}
+                        alt={entry.file.name}
+                        width={160}
+                        height={160}
+                        className="w-full h-full object-contain"
+                        unoptimized
+                        onLoad={() => setImageLoaded((p) => ({ ...p, [entry.id]: true }))}
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <p className="text-slate-200 font-medium text-sm sm:text-base truncate leading-snug">
+                        {entry.file.name}
+                      </p>
+                      <p className="text-red-400/90 text-xs sm:text-sm leading-relaxed">
+                        Original: {Math.round(entry.originalSize / 1024)} KB
+                      </p>
+                      {entry.status === "converting" && (
+                        <p className="text-slate-400 text-xs sm:text-sm flex items-center gap-2 mt-1 leading-relaxed">
+                          <span className="animate-spin">⟳</span> Converting...
+                        </p>
+                      )}
+                      {entry.status === "done" && entry.compressedSize != null && (
+                        <p className="text-emerald-400 text-xs sm:text-sm leading-relaxed">
+                          Compressed: {Math.round(entry.compressedSize / 1024)} KB
+                        </p>
+                      )}
+                      {entry.status === "pending" && (
+                        <p className="text-slate-500 text-xs sm:text-sm leading-relaxed">Queued</p>
+                      )}
+                      <div className="flex items-center gap-3 pt-2">
+                        <label className="text-slate-400 text-xs sm:text-sm whitespace-nowrap shrink-0 font-medium">
+                          Quality:
+                        </label>
+                        <input
+                          type="number"
+                          min={10}
+                          max={90}
+                          value={
+                            entry.id in editingQuality
+                              ? editingQuality[entry.id]
+                              : Math.round(entry.quality * 100)
+                          }
+                          onChange={(e) =>
+                            setEditingQuality((prev) => ({
+                              ...prev,
+                              [entry.id]: e.target.value,
+                            }))
+                          }
+                          onBlur={(e) =>
+                            applyFileQualityInput(entry.id, e.target.value)
+                          }
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") e.currentTarget.blur();
+                          }}
+                          disabled={entry.status === "converting"}
+                          className="w-14 sm:w-16 px-2.5 py-2 rounded-md bg-slate-900/80 border border-slate-600 text-slate-200 text-xs sm:text-sm text-right disabled:opacity-50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        />
+                        <span className="text-slate-400 text-xs sm:text-sm shrink-0">
+                          %
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-4 shrink-0 self-end sm:self-auto">
+                    {entry.status === "done" && entry.compressedUrl && (
+                      <>
+                        <a
+                          href={entry.compressedUrl}
+                          download={getOutputFilename(entry)}
+                          className="px-5 py-3 sm:px-6 sm:py-3 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-100 font-medium text-sm transition-colors border border-slate-600"
+                        >
+                          Download
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => copyToClipboard(entry)}
+                          className="px-3 py-2.5 rounded-lg bg-slate-700/80 hover:bg-slate-600 text-slate-200 text-sm font-medium border border-slate-600 transition-colors"
+                          aria-label="Copy WebP to clipboard"
+                        >
+                          Copy
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => reConvert(entry.id)}
+                          className="px-3 py-2.5 rounded-lg bg-slate-700/80 hover:bg-slate-600 text-slate-200 text-sm font-medium border border-slate-600 transition-colors"
+                          aria-label="Re-convert with current quality"
+                        >
+                          Re-convert
+                        </button>
+                      </>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => removeFile(entry.id)}
+                      className="p-3 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-slate-700/50 transition-colors touch-manipulation"
+                      aria-label={`Remove ${entry.file.name}`}
+                    >
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M6 18L18 6M6 6l12 12"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              );
+              })}
+              {useAccordion && (
+                <button
+                  type="button"
+                  onClick={() => setIsListExpanded((e) => !e)}
+                  className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-slate-800/60 border border-slate-700/60 text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 text-sm font-medium transition-colors"
+                  aria-expanded={isListExpanded}
+                  aria-label={isListExpanded ? "Collapse list" : `Show ${hiddenCount} more images`}
+                >
+                  {isListExpanded ? (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                      </svg>
+                      Collapse
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                      Show {hiddenCount} more image{hiddenCount !== 1 ? "s" : ""}
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Controls */}
-        <div className="w-full flex flex-col sm:flex-row gap-4 sm:gap-6 items-stretch sm:items-center justify-between">
+        <div className={`flex flex-col sm:flex-row gap-6 sm:gap-10 items-stretch sm:items-center justify-between ${hasFiles ? "pt-2" : "pt-0"}`}>
           <input
             ref={inputRef}
-            onChange={() =>
-              uploadFile(
-                inputRef.current != null ? inputRef.current.files[0] : ""
-              )
-            }
+            onChange={(e) => uploadFiles(e.target.files)}
             className="hidden"
             type="file"
             accept="image/*"
+            multiple
           />
 
+          {hasFiles && (
           <button
             type="button"
             onClick={() => inputRef.current?.click()}
-            className="px-5 py-3 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium text-sm transition-colors border border-slate-600 hover:border-slate-500"
+            className="px-6 py-4 sm:px-8 sm:py-4 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium text-sm transition-colors border border-slate-600 hover:border-slate-500 touch-manipulation"
           >
-            Choose image
+            Add more images
           </button>
+          )}
 
-          {compressedFile ? (
-            <a
-              download="converted.webp"
-              href={compressedFile}
-              className="px-5 py-3 rounded-xl bg-sky-500 hover:bg-sky-400 text-white font-medium text-sm text-center transition-colors"
-            >
-              Download WebP
-            </a>
-          ) : null}
-
-          <div className="flex flex-col gap-2 min-w-0 flex-1 sm:flex-initial sm:max-w-xs">
-            <div className="flex items-center justify-between gap-3">
-              <label className="text-slate-400 text-sm font-medium">
-                Quality
+          {hasFiles && (
+            <div className="flex flex-col gap-3 min-w-0 flex-1 sm:flex-initial sm:max-w-xs">
+              <label className="text-slate-400 text-sm font-medium" id="default-quality-label">
+                Default for new: {defaultQualityPercent}%
               </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={10}
-                  max={90}
-                  value={manualInputValue !== null ? manualInputValue : qualityPercent}
-                  onChange={handleManualQualityChange}
-                  onBlur={handleManualQualityBlur}
-                  onKeyDown={handleManualQualityKeyDown}
-                  disabled={isConverting}
-                  className="w-14 px-2 py-1 rounded-md bg-slate-800 border border-slate-600 text-slate-200 text-sm text-right disabled:opacity-50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                />
-                <span className="text-slate-400 text-sm">%</span>
-                <button
-                  ref={applyButtonRef}
-                  type="button"
-                  onClick={applyManualQuality}
-                  disabled={isConverting}
-                  className="px-3 py-1 rounded-md bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm font-medium transition-colors disabled:opacity-50"
-                >
-                  Apply
-                </button>
-              </div>
+              <input
+                type="range"
+                min="0.1"
+                max="0.9"
+                step="0.1"
+                value={compression}
+                onChange={(e) => setDefaultQuality(e.target.value)}
+                className="w-full h-2.5 touch-none"
+                aria-labelledby="default-quality-label"
+              />
             </div>
-            <input
-              ref={rangeRef}
-              value={compression}
-              onChange={(e) => adjustCompression(e.target.value)}
-              type="range"
-              max="0.9"
-              min="0.1"
-              step="0.1"
-              className="w-full h-2 disabled:opacity-50"
-              disabled={isConverting}
-            />
-          </div>
+          )}
+          {hasFiles && (
+            <p className="text-slate-500 text-xs w-full sm:w-auto">
+              Max {MAX_FILES} images, {MAX_FILE_SIZE_MB} MB each
+            </p>
+          )}
         </div>
 
-        <canvas
-          className="hidden"
-          ref={canvasRef}
-          width={file ? file.naturalWidth : 330}
-          height={file ? file.naturalHeight : 330}
-        />
+        <canvas ref={canvasRef} className="hidden" width={1} height={1} />
       </div>
+
+      <ToastList toasts={toasts} dismiss={(id) => setToasts((p) => p.filter((t) => t.id !== id))} />
     </section>
   );
 }
