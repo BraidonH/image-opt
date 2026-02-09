@@ -1,14 +1,14 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0f172a;
-  --foreground: #f8fafc;
-  --card-bg: rgba(30, 41, 59, 0.6);
-  --card-border: rgba(148, 163, 184, 0.15);
-  --accent: #38bdf8;
-  --accent-muted: rgba(56, 189, 248, 0.2);
-  --success: #4ade80;
-  --muted: #94a3b8;
+  --background: #0a0e14;
+  --foreground: #e2e8f0;
+  --card-bg: rgba(15, 23, 42, 0.9);
+  --card-border: rgba(71, 85, 105, 0.5);
+  --accent: #334155;
+  --accent-muted: rgba(51, 65, 85, 0.4);
+  --success: #22c55e;
+  --muted: #64748b;
 }
 
 @theme inline {
@@ -33,7 +33,7 @@ input[type="range"] {
 
 input[type="range"]::-webkit-slider-runnable-track {
   height: 6px;
-  background: rgba(148, 163, 184, 0.3);
+  background: rgba(71, 85, 105, 0.6);
   border-radius: 3px;
 }
 
@@ -42,7 +42,7 @@ input[type="range"]::-webkit-slider-thumb {
   appearance: none;
   width: 18px;
   height: 18px;
-  background: #38bdf8;
+  background: #64748b;
   border-radius: 50%;
   margin-top: -6px;
   cursor: pointer;
@@ -51,19 +51,20 @@ input[type="range"]::-webkit-slider-thumb {
 
 input[type="range"]::-webkit-slider-thumb:hover {
   transform: scale(1.1);
-  box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.3);
+  background: #94a3b8;
+  box-shadow: 0 0 0 4px rgba(100, 116, 139, 0.3);
 }
 
 input[type="range"]::-moz-range-track {
   height: 6px;
-  background: rgba(148, 163, 184, 0.3);
+  background: rgba(71, 85, 105, 0.6);
   border-radius: 3px;
 }
 
 input[type="range"]::-moz-range-thumb {
   width: 18px;
   height: 18px;
-  background: #38bdf8;
+  background: #64748b;
   border-radius: 50%;
   border: none;
   cursor: pointer;
@@ -72,21 +73,22 @@ input[type="range"]::-moz-range-thumb {
 
 input[type="range"]::-moz-range-thumb:hover {
   transform: scale(1.1);
-  box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.3);
+  background: #94a3b8;
+  box-shadow: 0 0 0 4px rgba(100, 116, 139, 0.3);
 }
 
 /* File input styling */
 input[type="file"] {
   background: transparent;
-  border: 2px dashed rgba(148, 163, 184, 0.4);
-  color: #94a3b8;
+  border: 2px dashed var(--muted);
+  color: var(--muted);
   transition: all 0.2s ease;
 }
 
 input[type="file"]:hover {
-  color: #f8fafc;
-  border-color: #38bdf8;
-  background: rgba(56, 189, 248, 0.08);
+  color: #e2e8f0;
+  border-color: #94a3b8;
+  background: rgba(30, 41, 59, 0.5);
 }
 
 /* Backdrop blur support */
