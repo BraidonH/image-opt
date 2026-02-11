@@ -25,6 +25,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="overflow-x-hidden scroll-smooth" suppressHydrationWarning>
+      <meta name="google-site-verification" content="dThnZfKKTn1szJ-Ltf19rsUWFPpbhWTEGU0PXPZKexc" />
       <meta name="google-adsense-account" content="ca-pub-5509282482580720"></meta>
       <body
         className={`${shareTech.variable} ${geistMono.variable} font-[family-name:var(--font-share-tech)] antialiased flex flex-col items-center min-h-screen`}
